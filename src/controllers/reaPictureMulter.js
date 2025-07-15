@@ -3,10 +3,17 @@ const sharp = require('sharp');
 const fs = require('fs');
 const path = require('path');
 
+// Ensure the tmp directory exists
+const tmpDir = path.join(__dirname, 'tmp');
+
+if (!fs.existsSync(tmpDir)) {
+  fs.mkdirSync(tmpDir);
+}
+
 // ✅ 1) Custom disk storage: always write to tmp folder for Cloudinary
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, './tmp'); // Save to tmp only — you won't keep it local!
+    cb(null, tmpDir); // Save to tmp only — you won't keep it local!
   },
   filename: (req, file, cb) => {
     cb(null, Date.now().toString() + "_" + file.originalname);
@@ -27,7 +34,7 @@ const resizeImage = async (req, res, next) => {
   if (!req.file) return next();
 
   const inputPath = req.file.path;
-  const outputPath = path.join('./tmp', 'resized_' + req.file.filename);
+  const outputPath = path.join(tmpDir, 'resized_' + req.file.filename);
 
   try {
     const metadata = await sharp(inputPath).metadata();
