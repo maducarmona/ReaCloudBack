@@ -117,7 +117,7 @@ recursoRouter.get("/user", verifyUser, async (req, res) => {
 });
 
 // Postar um recurso
-recursoRouter.post("/", verifyUser, upload.single("file"), resizeImage, async (req, res) => {
+recursoRouter.post("/", verifyUser, upload.single("thumb"), resizeImage, async (req, res) => {
   const decodedToken = await checkToken(req);
 
   if (req.body && req.file) {
