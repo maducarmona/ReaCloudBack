@@ -57,6 +57,10 @@ const Recurso = sequelize.define('Recurso', {
     type: DataTypes.STRING,
     allowNull: false
   },
+  thumb_public_id: {
+    type: DataTypes.STRING,
+    allowNull: false
+  },
   subject: {
     type: DataTypes.ENUM(Object.keys(areasConhecimento)),
     allowNull: false,

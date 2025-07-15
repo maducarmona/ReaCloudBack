@@ -1,21 +1,18 @@
 const Recurso = require("../models/recurso");
 const Like = require("../models/like");
 const fs = require("fs");
+const cloudinary = require("../routes/cloudinary");
 const { checkToken, verifyUser } = require("../controllers/authentication");
 const recursoRouter = require("express").Router();
 const { upload, resizeImage } = require("../controllers/reaPictureMulter");
 const { Op: operators, fn, col } = require("sequelize");
-const {sendIssueNotification} = require("../controllers/sendIssueNotification");
+const {
+  sendIssueNotification,
+} = require("../controllers/sendIssueNotification");
 
 // Consultar (filtrar) dentre todos os recursos
 recursoRouter.get("/filter", async (req, res) => {
-  let {
-    title,
-    subject,
-    type,
-    currentPage = 1,
-    pageSize = 10,
-  } = req.query;
+  let { title, subject, type, currentPage = 1, pageSize = 10 } = req.query;
 
   // Parse currentPage and pageSize as integers
   currentPage = parseInt(currentPage, 10);
@@ -120,38 +117,59 @@ recursoRouter.get("/user", verifyUser, async (req, res) => {
 });
 
 // Postar um recurso
+const upload = multer({ dest: "tmp/" });
 recursoRouter.post("/", verifyUser, upload, resizeImage, async (req, res) => {
   const decodedToken = await checkToken(req);
 
   if (req.body && req.file) {
-    const imagePath = req.file.path;
+    const tempFilePath = req.file.path;
+    let result;
+
+    try {
+      // Upload to Cloudinary
+      const result = await cloudinary.uploader.upload(tempFilePath, {
+        folder: "reacloud_uploads",
+      });
+      console.log("Cloudinary upload result:", result);
+    } catch (error) {
+      console.error("Upload or DB error:", error);
+      fs.unlink(tempFilePath, (err) => {
+        if (err) console.error("Erro ao deletar arquivo temporário:", err);
+      });
+      return res.status(500).json({ error: "Erro ao salvar o recurso." });
+    }
 
     try {
       const recurso = await Recurso.create({
         ...req.body,
         user_id: decodedToken.id,
-        thumb: imagePath,
+        thumb: result.secure_url,
+        thumb_public_id: result.public_id,
       });
 
       if (recurso) {
         console.log("Recurso cadastrado com sucesso.");
+
+        // Always delete local temp file after DB success
+        fs.unlink(tempFilePath, (err) => {
+          if (err) console.error("Erro ao deletar arquivo temporário:", err);
+        });
+
         return res.status(201).json(recurso);
       } else {
         // com esse fs.unlink ele deleta a imagem se der erro
-        fs.unlink(imagePath, (err) => {
+        fs.unlink(tempFilePath, (err) => {
           if (err) {
             console.error("Erro ao deletar o arquivo temporário", err);
           }
         });
         console.log("Falha ao cadastrar recurso. (Database access failed)");
-        return res
-          .status(400)
-          .json({
-            error: "Falha ao cadastrar recurso. (Database access failed)",
-          });
+        return res.status(400).json({
+          error: "Falha ao cadastrar recurso. (Database access failed)",
+        });
       }
     } catch (error) {
-      fs.unlink(imagePath, (err) => {
+      fs.unlink(tempFilePath, (err) => {
         if (err) {
           console.error("Erro ao deletar o arquivo temporário", err);
         }
@@ -215,19 +233,14 @@ recursoRouter.delete("/:id", verifyUser, async (req, res) => {
         .json({ error: "O recurso com esse ID não foi encontrado." });
     }
 
-    const thumbPath = recurso.thumb; //tem que ser antes do destroy!!
+    const thumbPublicId = recurso.thumb_public_id; //tem que ser antes do destroy!!
 
     await recurso.destroy();
 
     // Para deletar a thumb
-    if (thumbPath) {
-      fs.unlink(thumbPath, (err) => {
-        if (err) {
-          console.error("Erro ao deletar o thumbnail:", err);
-        } else {
-          console.log("Thumbnail deletado com sucesso:", thumbPath);
-        }
-      });
+    if (thumbPublicId) {
+      const result = await cloudinary.uploader.destroy(thumbPublicId);
+      console.log("Cloudinary delete result:", result);
     }
 
     return res.status(204).send();
@@ -295,10 +308,16 @@ recursoRouter.post("/:recursoId/like", verifyUser, async (req, res) => {
       error.name === "NotBeforeError"
     ) {
       console.log("Usuario Não Logado");
-      return res.status(401).json({ error: "Usuário não autenticado. Por favor, faça login novamente."});
+      return res
+        .status(401)
+        .json({
+          error: "Usuário não autenticado. Por favor, faça login novamente.",
+        });
     }
     console.error(error);
-    return res.status(500).json({ error: "Erro ao processar a solicitação de Like." });
+    return res
+      .status(500)
+      .json({ error: "Erro ao processar a solicitação de Like." });
   }
 });
 
@@ -329,7 +348,7 @@ recursoRouter.post("/:recursoId/report", verifyUser, async (req, res) => {
     const user_id = user.id;
 
     const recurso = await Recurso.findOne({
-      where: { id: recurso_id},
+      where: { id: recurso_id },
       logging: false,
     });
 
@@ -342,22 +361,21 @@ recursoRouter.post("/:recursoId/report", verifyUser, async (req, res) => {
     const newIssue = await recurso.createIssue({
       recurso_id,
       user_id,
-      description
+      description,
     });
 
     // Send email notification
     await sendIssueNotification(newIssue, recurso, user);
 
     return res.status(201).json({
-      message: "Problema reportado com sucesso"
+      message: "Problema reportado com sucesso",
     });
-
   } catch (error) {
     console.error(error);
     return res
       .status(500)
       .json({ error: "Ocorreu um erro ao enviar o problema." });
-  }  
+  }
 });
 
 // editar um recurso
@@ -368,10 +386,10 @@ recursoRouter.put("/:id", verifyUser, upload, resizeImage, async (req, res) => {
   try {
     // Find existing resource
     const existingResource = await Recurso.findOne({
-      where: { 
+      where: {
         id: recursoId,
-        user_id: decodedToken.id 
-      }
+        user_id: decodedToken.id,
+      },
     });
 
     if (!existingResource) {
@@ -380,12 +398,14 @@ recursoRouter.put("/:id", verifyUser, upload, resizeImage, async (req, res) => {
           if (err) console.error("Erro ao deletar arquivo temporário", err);
         });
       }
-      return res.status(404).json({ error: "Recurso não encontrado ou não autorizado" });
+      return res
+        .status(404)
+        .json({ error: "Recurso não encontrado ou não autorizado" });
     }
 
     // Prepare update data
     const updateData = { ...req.body };
-    
+
     // Handle image update if provided
     if (req.file) {
       // Delete old image
@@ -399,10 +419,10 @@ recursoRouter.put("/:id", verifyUser, upload, resizeImage, async (req, res) => {
 
     // Update resource
     const [updated] = await Recurso.update(updateData, {
-      where: { 
+      where: {
         id: recursoId,
-        user_id: decodedToken.id 
-      }
+        user_id: decodedToken.id,
+      },
     });
 
     if (updated) {
@@ -416,7 +436,6 @@ recursoRouter.put("/:id", verifyUser, upload, resizeImage, async (req, res) => {
       }
       return res.status(400).json({ error: "Falha ao atualizar recurso" });
     }
-
   } catch (error) {
     if (req.file) {
       fs.unlink(req.file.path, (err) => {
