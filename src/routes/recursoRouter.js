@@ -126,7 +126,7 @@ recursoRouter.post("/", verifyUser, upload.single("file"), resizeImage, async (r
 
     try {
       // Upload to Cloudinary
-      const result = await cloudinary.uploader.upload(tempFilePath, {
+      result = await cloudinary.uploader.upload(tempFilePath, {
         folder: "reacloud_uploads",
       });
       console.log("Cloudinary upload result:", result);
