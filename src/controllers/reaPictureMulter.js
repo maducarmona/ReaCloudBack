@@ -23,7 +23,7 @@ const fileFilter = (req, file, cb) => {
     return cb(null, false);
 };
 
-const upload = multer({ storage, fileFilter }).single('thumb');
+const upload = multer({ dest: "tmp/" });
 
 // Middleware to handle resizing
 const resizeImage = async (req, res, next) => {
