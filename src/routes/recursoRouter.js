@@ -117,7 +117,6 @@ recursoRouter.get("/user", verifyUser, async (req, res) => {
 });
 
 // Postar um recurso
-const upload = multer({ dest: "tmp/" });
 recursoRouter.post("/", verifyUser, upload, resizeImage, async (req, res) => {
   const decodedToken = await checkToken(req);
 
