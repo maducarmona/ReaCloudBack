@@ -1,7 +1,7 @@
 const Recurso = require("../models/recurso");
 const Like = require("../models/like");
 const fs = require("fs");
-const cloudinary = require("./cloudinary");
+const { cloudinary } = require("./cloudinary");
 const { checkToken, verifyUser } = require("../controllers/authentication");
 const recursoRouter = require("express").Router();
 const { upload, resizeImage } = require("../controllers/reaPictureMulter");
