@@ -117,7 +117,7 @@ recursoRouter.get("/user", verifyUser, async (req, res) => {
 });
 
 // Postar um recurso
-recursoRouter.post("/", verifyUser, upload, resizeImage, async (req, res) => {
+recursoRouter.post("/", verifyUser, upload.single("file"), resizeImage, async (req, res) => {
   const decodedToken = await checkToken(req);
 
   if (req.body && req.file) {
@@ -378,7 +378,7 @@ recursoRouter.post("/:recursoId/report", verifyUser, async (req, res) => {
 });
 
 // editar um recurso
-recursoRouter.put("/:id", verifyUser, upload, resizeImage, async (req, res) => {
+recursoRouter.put("/:id", verifyUser, upload.single("file"), resizeImage, async (req, res) => {
   const decodedToken = await checkToken(req);
   const recursoId = req.params.id;
 
